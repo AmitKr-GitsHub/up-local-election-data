@@ -42,22 +42,11 @@ Progress snapshots are saved in:
 - `outputs/post_5_progress.json`
 - `outputs/post_6_progress.json`
 
-## Quick verification (random 2 districts)
-
-To verify the flow quickly (without full scrape), run:
-
-```bash
-python scrape_up_sec.py --out-dir outputs --post-types 5 6 --verify-random --verify-samples 2
-```
-
-This writes `outputs/verification_random_samples.csv` with one random GP sample from each of 2 random districts per selected post type.
-
 ## Google Colab
 
-Open `up_sec_scraper_colab.ipynb` and run cells top-to-bottom:
+Open `up_sec_scraper_colab.ipynb`, then:
 
-1. Installs dependencies.
-2. Writes the full scraper code automatically (`%%writefile scrape_up_sec.py`).
-3. Runs random verification for 2 districts.
-4. Runs full scrape with resume.
-5. Downloads generated Excel files.
+1. Install dependencies.
+2. Upload `scrape_up_sec.py`.
+3. Run scrape cell.
+4. Download generated Excel files.
