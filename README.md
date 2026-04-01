@@ -42,22 +42,11 @@ Progress snapshots are saved in:
 - `outputs/post_5_progress.json`
 - `outputs/post_6_progress.json`
 
-## Quick verification (random 2 districts)
+## Google Colab
 
-To verify the flow quickly (without full scrape), run:
+Open `up_sec_scraper_colab.ipynb`, then:
 
-```bash
-python scrape_up_sec.py --out-dir outputs --post-types 5 6 --verify-random --verify-samples 2
-```
-
-This writes `outputs/verification_random_samples.csv` with one random GP sample from each of 2 random districts per selected post type.
-
-## Google Colab (one-click runnable)
-
-Open `up_sec_scraper_colab.ipynb` in Colab and run cells top-to-bottom:
-
-1. Installs dependencies.
-2. Writes `scrape_up_sec.py` automatically (no manual upload needed).
-3. Runs quick verification for random GP from 2 districts (`--verify-random --verify-samples 2`).
-4. Runs full scrape for post types `5` and `6`.
-5. Downloads `pradhan_option_5.xlsx` and `sadashya_option_6.xlsx`.
+1. Install dependencies.
+2. Upload `scrape_up_sec.py`.
+3. Run scrape cell.
+4. Download generated Excel files.

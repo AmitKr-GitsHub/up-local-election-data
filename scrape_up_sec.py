@@ -25,15 +25,12 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urljoin
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-
-try:
-    import pandas as pd
-except Exception:  # noqa: BLE001
-    pd = None
 
 URL = "https://sec.up.nic.in/site/DownloadCandidateFaDebt.aspx"
 PANEL_ID = "ctl00_ContentPlaceHolder1_Panel1"
@@ -128,6 +125,14 @@ class WebFormsScraper:
             return ""
         opt = sel.find("option", selected=True)
         return (opt.get("value") if opt else "") or ""
+
+    @staticmethod
+    def selected_text(soup: BeautifulSoup, select_id: str) -> str:
+        sel = soup.find("select", id=select_id)
+        if not sel:
+            return ""
+        opt = sel.find("option", selected=True)
+        return opt.get_text(" ", strip=True) if opt else ""
 
     def postback(self, soup: BeautifulSoup, target: str, value: str) -> BeautifulSoup:
         payload = self.hidden_fields(soup)
@@ -302,86 +307,13 @@ def scrape_post_type(scraper: WebFormsScraper, post_type: str, post_label: str) 
                         )
                         progress_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    if csv_path.exists() and pd is not None:
+    if csv_path.exists():
         df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
         xlsx_path = out_dir / ("pradhan_option_5.xlsx" if post_type == PRADHAN else "sadashya_option_6.xlsx")
         df.to_excel(xlsx_path, index=False)
 
     state.update({"completed": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
     progress_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def verify_random_samples(scraper: WebFormsScraper, post_type: str, samples: int = 2) -> List[dict]:
-    """Dry verification for random GP combinations from random districts."""
-    soup = scraper.initial_page()
-    soup = scraper.postback(soup, POST_DDL, post_type)
-    districts = scraper.options(soup, DIST_DDL)
-    if not districts:
-        return []
-
-    pick_count = min(samples, len(districts))
-    sampled_districts = random.sample(districts, pick_count)
-    output: List[dict] = []
-
-    for d_val, d_name in sampled_districts:
-        d_soup = scraper.postback(soup, DIST_DDL, d_val)
-        blocks = scraper.options(d_soup, BLOCK_DDL)
-        if not blocks:
-            output.append(
-                {
-                    "post_type": post_type,
-                    "district_code": d_val,
-                    "district_name": d_name,
-                    "status": "no_blocks",
-                }
-            )
-            continue
-
-        b_val, b_name = random.choice(blocks)
-        b_soup = scraper.postback(d_soup, BLOCK_DDL, b_val)
-        gps = scraper.options(b_soup, GP_DDL)
-        if not gps:
-            output.append(
-                {
-                    "post_type": post_type,
-                    "district_code": d_val,
-                    "district_name": d_name,
-                    "block_code": b_val,
-                    "block_name": b_name,
-                    "status": "no_gps",
-                }
-            )
-            continue
-
-        g_val, g_name = random.choice(gps)
-        g_soup = scraper.postback(b_soup, GP_DDL, g_val)
-        chosen_w_val, chosen_w_name = "", ""
-        final_soup = g_soup
-        if post_type == SADASHYA:
-            wards = scraper.options(g_soup, WARD_DDL)
-            if wards:
-                chosen_w_val, chosen_w_name = random.choice(wards)
-                final_soup = scraper.postback(g_soup, WARD_DDL, chosen_w_val)
-
-        panel = final_soup.find(id=PANEL_ID)
-        rows, msg = scraper.parse_tables(panel)
-        output.append(
-            {
-                "post_type": post_type,
-                "district_code": d_val,
-                "district_name": d_name,
-                "block_code": b_val,
-                "block_name": b_name,
-                "gp_code": g_val,
-                "gp_name": g_name,
-                "ward_code": chosen_w_val,
-                "ward_name": chosen_w_name,
-                "rows_found": len(rows),
-                "message": msg,
-                "status": "ok",
-            }
-        )
-    return output
 
 
 def parse_args() -> argparse.Namespace:
@@ -399,17 +331,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-sleep", type=float, default=0.1)
     p.add_argument("--max-sleep", type=float, default=0.35)
     p.add_argument("--max-retries", type=int, default=5)
-    p.add_argument(
-        "--verify-random",
-        action="store_true",
-        help="Only verify random Gram Panchayat samples from 2 districts per selected post type.",
-    )
-    p.add_argument(
-        "--verify-samples",
-        type=int,
-        default=2,
-        help="Number of random districts to verify when --verify-random is set.",
-    )
     return p.parse_args()
 
 
@@ -426,20 +347,8 @@ def main() -> None:
     ensure_dir(cfg.out_dir)
 
     scraper = WebFormsScraper(cfg)
-    if pd is None:
-        print("Warning: pandas not installed. Excel export will be skipped; CSV/progress files will still be generated.")
 
     mapping = {PRADHAN: "Gram Panchayat Pradhan", SADASHYA: "Gram Panchayat Sadashya"}
-    if args.verify_random:
-        all_results: List[dict] = []
-        for pt in args.post_types:
-            all_results.extend(verify_random_samples(scraper, pt, samples=args.verify_samples))
-        verify_path = cfg.out_dir / "verification_random_samples.csv"
-        if all_results:
-            append_rows_csv(verify_path, all_results)
-        print("Verification completed. Results:", verify_path)
-        return
-
     for pt in args.post_types:
         scrape_post_type(scraper, pt, mapping[pt])
 
